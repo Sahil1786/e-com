@@ -6,6 +6,7 @@ const config = require("../config");
 const { AppError } = require("../middleware/error");
 const { authenticate } = require("../middleware/auth");
 const { sendOtp, verifyOtp, normalizeMobile } = require("../utils/msg91");
+const { otpSendLimiter, otpVerifyLimiter } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
@@ -23,14 +24,13 @@ const sendTokenCookie = (res, user) => {
 };
 
 async function getMainAdminId() {
+  const identityFilters = [];
+  if (config.mainAdmin.mobile) identityFilters.push({ mobile: config.mainAdmin.mobile });
+  if (config.mainAdmin.email) identityFilters.push({ email: config.mainAdmin.email });
+  if (identityFilters.length === 0) return null;
+
   const mainAdmin = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { mobile: config.mainAdmin.mobile },
-        { email: config.mainAdmin.email },
-        { role: "ADMIN" },
-      ],
-    },
+    where: { OR: identityFilters },
     orderBy: { id: "asc" },
     select: { id: true },
   });
@@ -38,11 +38,12 @@ async function getMainAdminId() {
 }
 
 // 1. Send OTP via MSG91
-router.post("/send-otp", async (req, res, next) => {
+router.post("/send-otp", otpSendLimiter, async (req, res, next) => {
   try {
     const { mobile, purpose = "Login" } = req.body;
-    if (!mobile) {
-      throw new AppError("Mobile number is required", 400);
+    if (!mobile || typeof purpose !== "string" ||
+        !["login", "register"].includes(purpose.toLowerCase())) {
+      throw new AppError("A mobile number and valid OTP purpose are required", 400);
     }
 
     const cleanMobile = normalizeMobile(mobile);
@@ -70,7 +71,7 @@ router.post("/send-otp", async (req, res, next) => {
 });
 
 // 2. Verify OTP -> Issues JWT Token ONLY if OTP is valid
-router.post("/verify-otp", async (req, res, next) => {
+router.post("/verify-otp", otpVerifyLimiter, async (req, res, next) => {
   try {
     const { mobile, otp } = req.body;
     if (!mobile || !otp) {
@@ -80,28 +81,10 @@ router.post("/verify-otp", async (req, res, next) => {
     // Strictly verify OTP first; throws 401 if invalid or expired
     const verifiedMobile = await verifyOtp(mobile, otp);
 
-    const isMainAdminMobile = verifiedMobile === config.mainAdmin.mobile;
-
     let user = await prisma.user.findUnique({ where: { mobile: verifiedMobile } });
 
-    // Only allow existing registered users (or Main Admin) to log in
     if (!user) {
-      if (isMainAdminMobile) {
-        user = await prisma.user.create({
-          data: {
-            name: "Main Admin",
-            mobile: verifiedMobile,
-            role: "ADMIN",
-          },
-        });
-      } else {
-        throw new AppError("Account not found. Please register first.", 404);
-      }
-    } else if (isMainAdminMobile && user.role !== "ADMIN") {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { role: "ADMIN" },
-      });
+      throw new AppError("Account not found. Please register first.", 404);
     }
 
     // OTP is verified -> Now issue login token
@@ -131,14 +114,20 @@ router.post("/register", async (req, res, next) => {
   try {
     const { name, email, mobile, password, otp } = req.body;
 
-    if (!name || !mobile || !otp) {
+    if (typeof name !== "string" || !name.trim() || !mobile || !otp) {
       throw new AppError("Name, mobile number, and OTP are required to register", 400);
     }
-    if (password && password.length < 6) {
+    if (password !== undefined && (typeof password !== "string" || password.length < 6)) {
       throw new AppError("Password must be at least 6 characters", 400);
     }
 
+    if (email !== undefined && email !== null && typeof email !== "string") {
+      throw new AppError("Email must be a string", 400);
+    }
     const cleanEmail = email ? email.trim().toLowerCase() : null;
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      throw new AppError("A valid email address is required", 400);
+    }
     const cleanMobile = normalizeMobile(mobile);
 
     if (cleanEmail && (await prisma.user.findUnique({ where: { email: cleanEmail } }))) {
@@ -151,9 +140,6 @@ router.post("/register", async (req, res, next) => {
     // STRICT CHECK: Verify OTP before creating user or logging in
     await verifyOtp(cleanMobile, otp);
 
-    const isMainAdmin =
-      cleanMobile === config.mainAdmin.mobile || cleanEmail === config.mainAdmin.email;
-
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
     const user = await prisma.user.create({
       data: {
@@ -161,7 +147,7 @@ router.post("/register", async (req, res, next) => {
         email: cleanEmail,
         mobile: cleanMobile,
         passwordHash,
-        role: isMainAdmin ? "ADMIN" : "CUSTOMER",
+        role: "CUSTOMER",
       },
     });
 
@@ -190,7 +176,11 @@ router.post("/register", async (req, res, next) => {
 router.post("/login", async (req, res, next) => {
   try {
     const { identifier, email, mobile, password, otp } = req.body;
-    const loginId = (identifier || email || mobile || "").trim();
+    const loginValue = identifier || email || mobile || "";
+    if (typeof loginValue !== "string") {
+      throw new AppError("Mobile or Email must be a string", 400);
+    }
+    const loginId = loginValue.trim();
 
     if (!loginId) {
       throw new AppError("Mobile or Email is required", 400);
@@ -208,7 +198,8 @@ router.post("/login", async (req, res, next) => {
     }
 
     // If password is provided, validate it
-    if (password) {
+    if (password !== undefined) {
+      if (typeof password !== "string") throw new AppError("Password must be a string", 400);
       if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
         throw new AppError("Invalid credentials", 401);
       }

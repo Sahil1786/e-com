@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const config = require('../config');
 const prisma = require('../prisma');
 const { AppError } = require('../middleware/error');
@@ -16,10 +17,13 @@ async function sendOtp(rawMobile, purpose = 'Login') {
   const mobileWithCountry = `91${mobile}`;
 
   const hasLiveConfig = Boolean(config.msg91.authKey && config.msg91.templateId);
+  if (!hasLiveConfig && config.nodeEnv === 'production') {
+    throw new AppError('MSG91 is not configured for production OTP delivery', 503);
+  }
 
   // Generate a random 6-digit OTP when live, or '123456' in dev fallback
   const plainOtp = hasLiveConfig
-    ? String(Math.floor(100000 + Math.random() * 900000))
+    ? String(crypto.randomInt(100000, 1000000))
     : '123456';
 
   const otpHash = await bcrypt.hash(plainOtp, 10);
@@ -28,8 +32,8 @@ async function sendOtp(rawMobile, purpose = 'Login') {
   // Store the hashed OTP in Prisma so verifyOtp works reliably
   await prisma.otpVerification.upsert({
     where: { mobile },
-    update: { otpHash, expiresAt },
-    create: { mobile, otpHash, expiresAt },
+    update: { otpHash, expiresAt, attemptCount: 0 },
+    create: { mobile, otpHash, expiresAt, attemptCount: 0 },
   });
 
   // 1. Live MSG91 Flow API
@@ -55,8 +59,6 @@ async function sendOtp(rawMobile, purpose = 'Login') {
     });
 
     const data = await response.json();
-    console.log('[MSG91 Flow Response]:', data);
-
     if (data.type !== 'success') {
       throw new AppError(data.message || 'Failed to send OTP via MSG91', 400);
     }
@@ -81,13 +83,33 @@ async function verifyOtp(rawMobile, otp) {
   if (!record || new Date() > new Date(record.expiresAt)) {
     throw new AppError('OTP has expired or was not requested', 401);
   }
+  if (record.attemptCount >= 5) {
+    await prisma.otpVerification.deleteMany({ where: { id: record.id } });
+    throw new AppError('Too many incorrect OTP attempts. Request a new OTP.', 429);
+  }
 
   const isValid = await bcrypt.compare(cleanOtp, record.otpHash);
   if (!isValid) {
+    const updated = await prisma.otpVerification.updateMany({
+      where: { id: record.id, attemptCount: record.attemptCount },
+      data: { attemptCount: { increment: 1 } },
+    });
+    if (updated.count !== 1) {
+      throw new AppError('OTP was already used or changed. Request a new OTP.', 409);
+    }
+    if (record.attemptCount + 1 >= 5) {
+      await prisma.otpVerification.deleteMany({ where: { id: record.id } });
+      throw new AppError('Too many incorrect OTP attempts. Request a new OTP.', 429);
+    }
     throw new AppError('Invalid OTP', 401);
   }
 
-  await prisma.otpVerification.delete({ where: { mobile } });
+  const consumed = await prisma.otpVerification.deleteMany({
+    where: { id: record.id, otpHash: record.otpHash },
+  });
+  if (consumed.count !== 1) {
+    throw new AppError('OTP was already used or changed. Request a new OTP.', 409);
+  }
   return mobile;
 }
 

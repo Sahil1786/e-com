@@ -4,13 +4,26 @@ const prisma = require('../prisma');
 const { AppError } = require('./error');
 
 const authenticate = async (req, res, next) => {
-  try {
-    const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
-    if (!token) throw new AppError('Authentication required', 401);
+  const authorization = req.headers.authorization;
+  const token = req.cookies?.token ||
+    (authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : null);
+  if (!token) return next(new AppError('Authentication required', 401));
 
-    const decoded = jwt.verify(token, config.jwtSecret);
-    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
-    if (!user) throw new AppError('User no longer exists', 401);
+  let payload;
+  try {
+    if (!config.jwtSecret) throw new Error('JWT_SECRET is not configured');
+    const verified = jwt.verify(token, config.jwtSecret);
+    if (!verified || typeof verified === 'string' || typeof verified.id !== 'string') {
+      throw new Error('Invalid token payload');
+    }
+    payload = verified;
+  } catch (err) {
+    return next(new AppError('Invalid or expired token', 401));
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+    if (!user) return next(new AppError('User no longer exists', 401));
 
     req.user = {
       id: user.id,
@@ -19,9 +32,9 @@ const authenticate = async (req, res, next) => {
       mobile: user.mobile,
       role: user.role,
     };
-    next();
+    return next();
   } catch (err) {
-    next(new AppError('Invalid or expired token', 401));
+    return next(err);
   }
 };
 

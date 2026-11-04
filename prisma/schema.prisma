@@ -24,6 +24,7 @@ model OtpVerification {
   mobile    String   @unique
   otpHash   String
   expiresAt DateTime
+  attemptCount Int    @default(0)
   createdAt DateTime @default(now())
 }
 
@@ -89,7 +90,7 @@ model Coupon {
 model Order {
   id                  String      @id @default(auto()) @map("_id") @db.ObjectId
   userId              String      @db.ObjectId
-  status              String      @default("PENDING") // PENDING, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED, REFUNDED
+  status              String      @default("PENDING")
   invoiceNumber       String?     @unique
 
   subtotalPaise       Int
@@ -102,6 +103,7 @@ model Order {
   totalAmountPaise    Int
   refundedAmountPaise Int         @default(0)
   refundReason        String?
+  refundIds           String[]    @default([])
 
   recipientName       String
   phone               String
@@ -114,6 +116,11 @@ model Order {
 
   couponId            String?     @db.ObjectId
   paymentId           String?
+  razorpayOrderId     String?     @unique
+  razorpaySignature   String?
+  paymentMethod       String      @default("RAZORPAY")
+  checkoutMode        String      @default("CART")
+  stockReserved       Boolean     @default(false)
   paidAt              DateTime?
   shippingChargePaise Int     @default(0)
   totalWeightKg       Float   @default(0.5)
@@ -122,6 +129,7 @@ model Order {
   awbCode             String? // Tracking number (Air Waybill)
   courierName         String?
   trackingUrl         String?
+  cancellationReason  String?
 
   user                User        @relation(fields: [userId], references: [id])
   coupon              Coupon?     @relation(fields: [couponId], references: [id])

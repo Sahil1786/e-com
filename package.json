@@ -3,10 +3,19 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "start": "nodemon app.js",
-    "migrate": "npx prisma migrate dev --name init",
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "node --test",
+    "routes": "node scripts/listRoutes.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "db:check": "node scripts/checkDatabase.js",
+    "db:push": "prisma db push",
     "seed": "node prisma/seed.js",
     "studio": "npx prisma studio"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -16,10 +25,12 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
     "express": "^4.22.3",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
-    "nodemon": "^3.1.10",
-    "pdfkit": "^0.20.2"
+    "pdfkit": "^0.20.2",
+    "razorpay": "^2.9.8"
   },
   "devDependencies": {
     "prisma": "^5.22.0"

@@ -31,6 +31,7 @@ function generateInvoicePdf(order, res) {
   doc.font('Helvetica')
     .text(`Order ID: #${order.id}`, { align: 'right' })
     .text(`Date: ${new Date(order.paidAt || order.createdAt).toLocaleDateString('en-IN')}`, { align: 'right' })
+    .text(`Payment: ${order.paymentMethod || 'RAZORPAY'}`, { align: 'right' })
     .text(`Status: ${order.status}`, { align: 'right' });
 
   doc.moveDown(1.5);
@@ -109,6 +110,9 @@ function generateInvoicePdf(order, res) {
     renderSummaryLine('IGST:', formatINR(order.igstPaise));
   }
 
+  if (order.shippingChargePaise > 0) {
+    renderSummaryLine('Shipping:', formatINR(order.shippingChargePaise));
+  }
   renderSummaryLine('Grand Total:', formatINR(order.totalAmountPaise), true);
 
   if (order.refundedAmountPaise > 0) {

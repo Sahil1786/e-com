@@ -2,11 +2,12 @@ require('dotenv').config();
 
 module.exports = {
   port: process.env.PORT || 4000,
-  jwtSecret: process.env.JWT_SECRET || 'fallback_secret',
+  trustProxy: Number(process.env.TRUST_PROXY || 0),
+  jwtSecret: process.env.JWT_SECRET || '',
   nodeEnv: process.env.NODE_ENV || 'development',
   mainAdmin: {
-    mobile: (process.env.MAIN_ADMIN_MOBILE || '9876543210').trim(),
-    email: (process.env.MAIN_ADMIN_EMAIL || 'admin@store.com').trim().toLowerCase(),
+    mobile: (process.env.MAIN_ADMIN_MOBILE || '').trim(),
+    email: (process.env.MAIN_ADMIN_EMAIL || '').trim().toLowerCase(),
   },
   msg91: {
     authKey: (process.env.MSG91_AUTH_KEY || '').trim(),
@@ -24,15 +25,30 @@ module.exports = {
     apiSecret: process.env.CLOUDINARY_API_SECRET || '',
   },
   razorpay: {
+    enabled: process.env.ENABLE_RAZORPAY === 'true',
     keyId: (process.env.RAZORPAY_KEY_ID || '').trim(),
     keySecret: (process.env.RAZORPAY_KEY_SECRET || '').trim(),
+    webhookSecret: (process.env.RAZORPAY_WEBHOOK_SECRET || '').trim(),
   },
   seller: {
-    name: process.env.SELLER_NAME || 'Acme India Retail Pvt Ltd',
-    address: process.env.SELLER_ADDRESS || '42 Residency Road, Bengaluru, KA',
-    gstin: process.env.SELLER_GSTIN || '29AABCU9603R1ZM',
+    name: process.env.SELLER_NAME || '',
+    address: process.env.SELLER_ADDRESS || '',
+    gstin: process.env.SELLER_GSTIN || '',
     state: (process.env.SELLER_STATE || 'KARNATAKA').trim().toUpperCase(),
   },
+  allowedOrigins: (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  shiprocket: {
+    enabled: process.env.ENABLE_SHIPROCKET === 'true',
+    email: (process.env.SHIPROCKET_EMAIL || '').trim(),
+    password: process.env.SHIPROCKET_PASSWORD || '',
+    warehousePincode: (process.env.WAREHOUSE_PINCODE || '').trim(),
+    pickupLocation: process.env.WAREHOUSE_PICKUP_LOCATION || 'Primary',
+    webhookToken: process.env.SHIPROCKET_WEBHOOK_TOKEN || '',
+  },
+  shippingChargePaise: Number(process.env.SHIPPING_CHARGE_PAISE || 0),
 
   validGstSlabs: [0, 5, 12, 18, 28],
 };

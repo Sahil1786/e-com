@@ -3,10 +3,19 @@ const { AppError } = require('../middleware/error');
 
 function validateCoupon(coupon, cartItems, subtotalPaise) {
   if (!coupon || !coupon.isActive) throw new AppError('Invalid or inactive coupon', 400);
+  if (!['PERCENT', 'FLAT'].includes(coupon.type) ||
+      !Number.isSafeInteger(coupon.value) || coupon.value <= 0 ||
+      (coupon.type === 'PERCENT' && coupon.value > 100) ||
+      !Number.isSafeInteger(coupon.minOrderPaise) || coupon.minOrderPaise < 0 ||
+      (coupon.maxDiscountPaise !== null && coupon.maxDiscountPaise !== undefined &&
+        (!Number.isSafeInteger(coupon.maxDiscountPaise) || coupon.maxDiscountPaise < 0))) {
+    throw new AppError('Coupon configuration is invalid', 400);
+  }
   if (coupon.expiresAt && new Date() > new Date(coupon.expiresAt)) {
     throw new AppError('Coupon has expired', 400);
   }
-  if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+  if (coupon.usageLimit !== null && coupon.usageLimit !== undefined &&
+      coupon.usedCount >= coupon.usageLimit) {
     throw new AppError('Coupon usage limit reached', 400);
   }
   if (subtotalPaise < coupon.minOrderPaise) {
@@ -25,10 +34,19 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
   const normalizedBuyerState = (buyerState || config.seller.state).trim().toUpperCase();
   const isIntraState = normalizedBuyerState === config.seller.state;
 
-  const subtotalPaise = cartItems.reduce(
-    (sum, item) => sum + item.product.pricePaise * item.quantity,
-    0
-  );
+  const getUnitPrice = (product) => product.pricePaise ?? Math.round((product.price || 0) * 100);
+  const subtotalPaise = cartItems.reduce((sum, item) => {
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) {
+      throw new AppError(`Invalid quantity for "${item.product.name}"`, 400);
+    }
+    const unitPricePaise = getUnitPrice(item.product);
+    if (!Number.isSafeInteger(unitPricePaise) || unitPricePaise < 0) {
+      throw new AppError(`Invalid price for "${item.product.name}"`, 400);
+    }
+    const subtotal = sum + unitPricePaise * item.quantity;
+    if (!Number.isSafeInteger(subtotal)) throw new AppError('Order total is too large', 400);
+    return subtotal;
+  }, 0);
 
   let totalDiscountPaise = 0;
   if (coupon) {
@@ -37,7 +55,7 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
     const eligibleSubtotal = coupon.productId
       ? cartItems
           .filter((i) => i.productId === coupon.productId)
-          .reduce((s, i) => s + i.product.pricePaise * i.quantity, 0)
+          .reduce((s, i) => s + getUnitPrice(i.product) * i.quantity, 0)
       : subtotalPaise;
 
     if (coupon.type === 'PERCENT') {
@@ -46,7 +64,7 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
       totalDiscountPaise = Math.min(coupon.value, eligibleSubtotal);
     }
 
-    if (coupon.maxDiscountPaise !== null) {
+    if (coupon.maxDiscountPaise !== null && coupon.maxDiscountPaise !== undefined) {
       totalDiscountPaise = Math.min(totalDiscountPaise, coupon.maxDiscountPaise);
     }
   }
@@ -55,8 +73,13 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
   const eligibleTotal = coupon?.productId
     ? cartItems
         .filter((i) => i.productId === coupon.productId)
-        .reduce((s, i) => s + i.product.pricePaise * i.quantity, 0)
+        .reduce((s, i) => s + getUnitPrice(i.product) * i.quantity, 0)
     : subtotalPaise;
+  const lastEligibleIndex = cartItems.reduce(
+    (lastIndex, item, index) =>
+      !coupon?.productId || coupon.productId === item.productId ? index : lastIndex,
+    -1
+  );
 
   let totalTaxablePaise = 0;
   let totalCgstPaise = 0;
@@ -64,21 +87,30 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
   let totalIgstPaise = 0;
 
   const computedItems = cartItems.map((item, idx) => {
-    const lineBase = item.product.pricePaise * item.quantity;
+    const unitPricePaise = getUnitPrice(item.product);
+    const lineBase = unitPricePaise * item.quantity;
     let itemDiscount = 0;
 
     const isEligible = !coupon?.productId || coupon.productId === item.productId;
     if (totalDiscountPaise > 0 && isEligible && eligibleTotal > 0) {
-      if (idx === cartItems.length - 1) {
-        itemDiscount = Math.min(lineBase, remainingDiscount);
+      if (idx === lastEligibleIndex) {
+        itemDiscount = Math.max(0, Math.min(lineBase, remainingDiscount));
       } else {
-        itemDiscount = Math.round((lineBase / eligibleTotal) * totalDiscountPaise);
-        remainingDiscount -= itemDiscount;
+        itemDiscount = Math.min(
+          lineBase,
+          Math.max(0, remainingDiscount),
+          Math.round((lineBase / eligibleTotal) * totalDiscountPaise)
+        );
+        remainingDiscount = Math.max(0, remainingDiscount - itemDiscount);
       }
     }
 
     const taxableValuePaise = Math.max(0, lineBase - itemDiscount);
-    const totalItemGst = Math.round((taxableValuePaise * item.product.gstRate) / 100);
+    const gstRate = item.product.gstRate ?? 18;
+    if (!config.validGstSlabs.includes(gstRate)) {
+      throw new AppError(`Invalid GST rate for "${item.product.name}"`, 400);
+    }
+    const totalItemGst = Math.round((taxableValuePaise * gstRate) / 100);
 
     let cgstPaise = 0;
     let sgstPaise = 0;
@@ -103,8 +135,8 @@ function calculateCartAndTax(cartItems, coupon = null, buyerState = config.selle
       productName: item.product.name,
       hsnCode: item.product.hsnCode,
       quantity: item.quantity,
-      unitPricePaise: item.product.pricePaise,
-      gstRate: item.product.gstRate,
+      unitPricePaise,
+      gstRate,
       discountPaise: itemDiscount,
       taxableValuePaise,
       cgstPaise,

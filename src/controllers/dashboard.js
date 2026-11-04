@@ -9,7 +9,7 @@ router.get("/dashboard", authenticate, requireAdmin, async (req, res, next) => {
   try {
     const paidOrders = await prisma.order.findMany({
       where: {
-        status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED", "REFUNDED"] },
+        status: { in: ["CONFIRMED", "PAID", "PROCESSING", "SHIPPED", "DELIVERED", "REFUNDED"] },
       },
     });
 
@@ -35,7 +35,7 @@ router.get("/dashboard", authenticate, requireAdmin, async (req, res, next) => {
     }
 
     const [readyToShipCount, inTransitCount, deliveredCount] = await Promise.all([
-      prisma.order.count({ where: { status: { in: ["PAID", "PROCESSING"] } } }),
+      prisma.order.count({ where: { status: { in: ["CONFIRMED", "PAID", "PROCESSING"] } } }),
       prisma.order.count({ where: { status: "SHIPPED" } }),
       prisma.order.count({ where: { status: "DELIVERED" } }),
     ]);

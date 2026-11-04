@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1500" viewBox="0 0 1600 1500" role="img" aria-labelledby="title description">
+  <title id="title">Current e-commerce COD checkout flow</title>
+  <desc id="description">Customer signs in, chooses cart or direct purchase, submits an address and COD checkout, the server validates stock and calculates totals, confirms the order, reserves stock and creates an invoice. The customer pays on delivery; the admin updates fulfillment manually; cancellation restores reserved stock.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eef4fb"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#102a43"/>
+      <stop offset="1" stop-color="#174b68"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="145%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#17324d" flood-opacity=".11"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M1 1 11 6 1 11Z" fill="#66829b"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M1 1 11 6 1 11Z" fill="#0e9f91"/>
+    </marker>
+    <style>
+      text { font-family: Inter, "Segoe UI", Arial, sans-serif; fill: #18324b; }
+      .title { fill: #fff; font-size: 38px; font-weight: 750; letter-spacing: .2px; }
+      .subtitle { fill: #d7e8f4; font-size: 18px; }
+      .node { fill: #fff; stroke: #d4e1ec; stroke-width: 2; rx: 18; filter: url(#shadow); }
+      .choice { fill: #fff; stroke: #c9d9e8; stroke-width: 2; rx: 18; filter: url(#shadow); }
+      .success { fill: #e8faf6; stroke: #0e9f91; stroke-width: 2; rx: 18; filter: url(#shadow); }
+      .warning { fill: #fff8e9; stroke: #e6a23c; stroke-width: 2; rx: 18; filter: url(#shadow); }
+      .disabled { fill: #fff0ef; stroke: #e38179; stroke-width: 2; rx: 18; }
+      .heading { font-size: 21px; font-weight: 700; }
+      .body { font-size: 16px; }
+      .small { font-size: 14px; fill: #526b80; }
+      .tag { font-size: 13px; font-weight: 700; fill: #087c71; letter-spacing: .7px; }
+      .path { fill: none; stroke: #66829b; stroke-width: 3; marker-end: url(#arrow); }
+      .pathTeal { fill: none; stroke: #0e9f91; stroke-width: 3; marker-end: url(#arrowTeal); }
+      .branch { fill: none; stroke: #66829b; stroke-width: 3; }
+      .label { font-size: 14px; font-weight: 700; fill: #526b80; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1500" fill="url(#background)"/>
+  <rect x="0" y="0" width="1600" height="125" fill="url(#header)"/>
+  <text x="70" y="58" class="title">How a COD order works</text>
+  <text x="72" y="91" class="subtitle">Current project flow · online payment and Shiprocket are off by default</text>
+  <rect x="1270" y="42" width="250" height="42" rx="21" fill="#d8f6ef"/>
+  <text x="1395" y="69" text-anchor="middle" class="tag">LIVE NOW · COD</text>
+
+  <rect x="520" y="155" width="560" height="90" class="node"/>
+  <text x="800" y="190" text-anchor="middle" class="heading">1 · Customer signs in</text>
+  <text x="800" y="220" text-anchor="middle" class="body">OTP login/register → customer token</text>
+  <path d="M800 245 V277" class="path"/>
+
+  <rect x="520" y="280" width="560" height="82" class="node"/>
+  <text x="800" y="314" text-anchor="middle" class="heading">2 · Browse active products</text>
+  <text x="800" y="341" text-anchor="middle" class="body">GET /v1/user/products</text>
+  <path d="M800 362 V387 M800 387 H395 V412 M800 387 H1205 V412" class="branch"/>
+  <path d="M395 387 V410" class="path"/>
+  <path d="M1205 387 V410" class="path"/>
+
+  <rect x="120" y="412" width="550" height="102" class="choice"/>
+  <text x="395" y="448" text-anchor="middle" class="heading">3A · Cart checkout</text>
+  <text x="395" y="478" text-anchor="middle" class="body">Add one or more products · POST /v1/user/cart</text>
+  <rect x="930" y="412" width="550" height="102" class="choice"/>
+  <text x="1205" y="448" text-anchor="middle" class="heading">3B · Buy directly</text>
+  <text x="1205" y="478" text-anchor="middle" class="body">Choose product and quantity · mode: DIRECT</text>
+
+  <path d="M395 514 V542 H800 V562" class="path"/>
+  <path d="M1205 514 V542 H800" class="branch"/>
+
+  <rect x="410" y="565" width="780" height="112" class="node"/>
+  <text x="800" y="603" text-anchor="middle" class="heading">4 · Submit delivery address and place COD order</text>
+  <text x="800" y="633" text-anchor="middle" class="body">POST /v1/user/orders/cod · requires customer token</text>
+  <text x="800" y="657" text-anchor="middle" class="small">recipient, phone, street, city, state, pincode · optional couponCode</text>
+  <path d="M800 677 V710" class="path"/>
+
+  <rect x="410" y="713" width="780" height="118" class="node"/>
+  <text x="800" y="751" text-anchor="middle" class="heading">5 · Server validates and prepares the order</text>
+  <text x="800" y="781" text-anchor="middle" class="body">Checks address, product, coupon eligibility, and available stock</text>
+  <text x="800" y="808" text-anchor="middle" class="small">Calculates item totals, GST, discount, and configured shipping fee</text>
+  <path d="M800 831 V858" class="path"/>
+
+  <polygon points="800,860 970,930 800,1000 630,930" fill="#fff" stroke="#7ea0b8" stroke-width="2" filter="url(#shadow)"/>
+  <text x="800" y="925" text-anchor="middle" class="heading">Stock available?</text>
+  <text x="800" y="951" text-anchor="middle" class="small">Checked again atomically</text>
+  <path d="M970 930 H1135" class="path"/>
+  <text x="1045" y="914" text-anchor="middle" class="label">NO</text>
+  <rect x="1140" y="883" width="350" height="96" class="warning"/>
+  <text x="1315" y="920" text-anchor="middle" class="heading">Order rejected</text>
+  <text x="1315" y="949" text-anchor="middle" class="body">Out of stock · no order confirmed</text>
+
+  <path d="M800 1000 V1030" class="pathTeal"/>
+  <text x="822" y="1020" class="label">YES</text>
+  <rect x="410" y="1033" width="780" height="108" class="success"/>
+  <text x="800" y="1073" text-anchor="middle" class="heading">6 · COD order confirmed</text>
+  <text x="800" y="1105" text-anchor="middle" class="body">Created as CONFIRMED inside a database transaction</text>
+  <path d="M800 1141 V1170" class="pathTeal"/>
+
+  <rect x="330" y="1173" width="940" height="108" class="success"/>
+  <text x="800" y="1213" text-anchor="middle" class="heading">7 · Order effects are committed together</text>
+  <text x="800" y="1245" text-anchor="middle" class="body">Reserve/deduct stock · increment coupon use · clear purchased cart items</text>
+  <text x="800" y="1267" text-anchor="middle" class="small">Generate invoice number · download with GET /v1/user/orders/:id/invoice</text>
+
+  <path d="M800 1281 V1310 H280 V1331 M800 1310 V1331 M800 1310 H1320 V1331" class="branch"/>
+  <path d="M280 1310 V1330" class="pathTeal"/>
+  <path d="M800 1310 V1330" class="path"/>
+  <path d="M1320 1310 V1330" class="path"/>
+
+  <rect x="70" y="1333" width="420" height="112" class="success"/>
+  <text x="280" y="1372" text-anchor="middle" class="heading">Customer pays on delivery</text>
+  <text x="280" y="1403" text-anchor="middle" class="body">Cash is collected by the courier</text>
+  <text x="280" y="1427" text-anchor="middle" class="small">GET /v1/user/orders/my</text>
+
+  <rect x="590" y="1333" width="420" height="112" class="node"/>
+  <text x="800" y="1372" text-anchor="middle" class="heading">Admin fulfills manually</text>
+  <text x="800" y="1403" text-anchor="middle" class="body">Updates status to SHIPPED / DELIVERED</text>
+  <text x="800" y="1427" text-anchor="middle" class="small">PATCH /v1/admin/orders/:id/status</text>
+
+  <rect x="1110" y="1333" width="420" height="112" class="warning"/>
+  <text x="1320" y="1372" text-anchor="middle" class="heading">If customer cancels</text>
+  <text x="1320" y="1403" text-anchor="middle" class="body">Eligible confirmed order is cancelled</text>
+  <text x="1320" y="1427" text-anchor="middle" class="small">POST cancel · restore reserved stock</text>
+
+  <text x="800" y="1480" text-anchor="middle" class="small">Shipping fee defaults to free (SHIPPING_CHARGE_PAISE=0). Razorpay and Shiprocket features are unavailable until enabled and configured.</text>
+</svg>

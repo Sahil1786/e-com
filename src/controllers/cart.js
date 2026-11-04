@@ -6,14 +6,13 @@ const { AppError } = require("../middleware/error");
 
 const router = express.Router();
 
-// View Cart + GST breakdown
 router.get("/cart", authenticate, async (req, res, next) => {
   try {
     const cartItems = await prisma.cartItem.findMany({
       where: { userId: req.user.id },
       include: { product: true },
     });
-    const activeItems = cartItems.filter((item) => !item.product.isDeleted);
+    const activeItems = cartItems.filter((item) => item.product.isDeleted !== true);
     const summary = calculateCartAndTax(activeItems, null, req.query.state);
     res.json({ success: true, cartItems: activeItems, summary });
   } catch (err) {
@@ -21,83 +20,41 @@ router.get("/cart", authenticate, async (req, res, next) => {
   }
 });
 
-// Add or Update Cart Item Quantity
-// router.post("/cart", authenticate, async (req, res, next) => {
-//   try {
-//     const { productId, quantity } = req.body;
-//     const qty = Number(quantity);
-//     if (!productId || isNaN(qty) || qty < 1) {
-//       throw new AppError("Valid productId and quantity >= 1 required");
-//     }
-
-//     const product = await prisma.product.findFirst({
-//       where: { id: Number(productId), isDeleted: false },
-//     });
-//     if (!product) throw new AppError("Product not found", 404);
-//     if (product.stock < qty) throw new AppError(`Only ${product.stock} units in stock`);
-
-//     const item = await prisma.cartItem.upsert({
-//       where: { userId_productId: { userId: req.user.id, productId: product.id } },
-//       update: { quantity: qty },
-//       create: { userId: req.user.id, productId: product.id, quantity: qty },
-//     });
-//     res.json({ success: true, item });
-//   } catch (err) {
-//     next(err);
-//   }
-// });
-// POST /v1/user/cart
-router.post("/cart", async (req, res, next) => {
+router.post("/cart", authenticate, async (req, res, next) => {
   try {
-    const { userId, productId, quantity = 1 } = req.body;
-
-    if (quantity <= 0) {
-      return res.status(400).json({ success: false, error: "Quantity must be at least 1" });
+    const { productId, quantity = 1 } = req.body;
+    const qty = Number(quantity);
+    if (!/^[0-9a-fA-F]{24}$/.test(String(productId || "")) ||
+        !Number.isSafeInteger(qty) || qty < 1) {
+      throw new AppError("Valid productId and positive integer quantity are required", 400);
     }
 
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-    });
-
-    if (!product || product.isDeleted) {
-      return res.status(404).json({ success: false, error: "Product not found" });
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product || product.isDeleted === true) {
+      throw new AppError("Product not found", 404);
     }
 
     const availableStock = product.stock ?? product.quantity ?? 0;
-
-    // 1. Block immediately if stock is 0
-    if (availableStock <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: `"${product.name}" is currently Out of Stock and cannot be purchased.`,
-        stockStatus: "OUT_OF_STOCK",
-      });
-    }
-
-    // 2. Check existing quantity in user's cart
     const existingCartItem = await prisma.cartItem.findUnique({
       where: {
-        userId_productId: { userId, productId },
+        userId_productId: { userId: req.user.id, productId },
       },
     });
+    const requestedQuantity = (existingCartItem?.quantity || 0) + qty;
 
-    const newTotalQuantity = (existingCartItem?.quantity || 0) + Number(quantity);
-
-    // 3. Block if total requested quantity exceeds available stock
-    if (newTotalQuantity > availableStock) {
-      return res.status(400).json({
-        success: false,
-        error: `Only ${availableStock} unit(s) of "${product.name}" available in stock. You already have ${existingCartItem?.quantity || 0} in your cart.`,
-        availableStock,
-      });
+    if (requestedQuantity > availableStock) {
+      throw new AppError(
+        `Only ${availableStock} unit(s) of "${product.name}" are available`,
+        400
+      );
     }
 
     const cartItem = await prisma.cartItem.upsert({
       where: {
-        userId_productId: { userId, productId },
+        userId_productId: { userId: req.user.id, productId },
       },
-      update: { quantity: newTotalQuantity },
-      create: { userId, productId, quantity: Number(quantity) },
+      update: { quantity: requestedQuantity },
+      create: { userId: req.user.id, productId, quantity: qty },
     });
 
     res.json({ success: true, cartItem });
@@ -106,11 +63,13 @@ router.post("/cart", async (req, res, next) => {
   }
 });
 
-// Remove Item from Cart
 router.delete("/cart/:productId", authenticate, async (req, res, next) => {
   try {
+    if (!/^[0-9a-fA-F]{24}$/.test(req.params.productId)) {
+      throw new AppError("Invalid product ID", 400);
+    }
     await prisma.cartItem.deleteMany({
-      where: { userId: req.user.id, productId: Number(req.params.productId) },
+      where: { userId: req.user.id, productId: req.params.productId },
     });
     res.json({ success: true, message: "Item removed from cart" });
   } catch (err) {

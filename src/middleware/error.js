@@ -6,10 +6,15 @@ class AppError extends Error {
   }
   
   const errorHandler = (err, req, res, next) => {
+    if (res.headersSent) return next(err);
     const status = err.statusCode || 500;
+    if (status >= 500) console.error(err);
     res.status(status).json({
       success: false,
-      error: err.message || 'Internal Server Error',
+      error:
+        status >= 500 && process.env.NODE_ENV === 'production'
+          ? 'Internal Server Error'
+          : err.message || 'Internal Server Error',
     });
   };
   

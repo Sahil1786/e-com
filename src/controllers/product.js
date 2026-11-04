@@ -121,6 +121,14 @@ router.post(
     try {
       const { name, description, pricePaise, gstRate, hsnCode, stock } = req.body;
       const gst = Number(gstRate);
+      const price = Number(pricePaise);
+      const initialStock = Number(stock ?? 0);
+      if (!name?.trim() || !Number.isSafeInteger(price) || price <= 0) {
+        throw new AppError("Product name and positive integer pricePaise are required", 400);
+      }
+      if (!Number.isSafeInteger(initialStock) || initialStock < 0) {
+        throw new AppError("Stock must be a non-negative integer", 400);
+      }
       if (!config.validGstSlabs.includes(gst)) {
         throw new AppError(`Invalid GST rate. Allowed: ${config.validGstSlabs.join(", ")}%`);
       }
@@ -136,12 +144,12 @@ router.post(
 
       const product = await prisma.product.create({
         data: {
-          name,
+          name: name.trim(),
           description: description || "",
-          pricePaise: Number(pricePaise),
+          pricePaise: price,
           gstRate: gst,
           hsnCode: hsnCode || "9983",
-          stock: Number(stock || 0),
+          stock: initialStock,
           imageUrl: mediaUrl,
           mediaType,
         },
@@ -161,11 +169,21 @@ router.put(
   upload.single("file"),
   async (req, res, next) => {
     try {
-      const id = Number(req.params.id);
+      const id = req.params.id;
+      if (!/^[0-9a-fA-F]{24}$/.test(id)) throw new AppError("Invalid product ID", 400);
       const existing = await prisma.product.findUnique({ where: { id } });
       if (!existing) throw new AppError("Product not found", 404);
 
       const { name, description, pricePaise, gstRate, hsnCode, stock } = req.body;
+      const nextPrice = pricePaise !== undefined ? Number(pricePaise) : existing.pricePaise;
+      const nextStock = stock !== undefined ? Number(stock) : existing.stock;
+      if (name !== undefined && !name.trim()) throw new AppError("Product name cannot be empty", 400);
+      if (pricePaise !== undefined && (!Number.isSafeInteger(nextPrice) || nextPrice <= 0)) {
+        throw new AppError("pricePaise must be a positive integer", 400);
+      }
+      if (stock !== undefined && (!Number.isSafeInteger(nextStock) || nextStock < 0)) {
+        throw new AppError("Stock must be a non-negative integer", 400);
+      }
       let gst = existing.gstRate;
       if (gstRate !== undefined) {
         gst = Number(gstRate);
@@ -186,12 +204,12 @@ router.put(
       const product = await prisma.product.update({
         where: { id },
         data: {
-          name: name ?? existing.name,
+          name: name !== undefined ? name.trim() : existing.name,
           description: description ?? existing.description,
-          pricePaise: pricePaise !== undefined ? Number(pricePaise) : existing.pricePaise,
+          pricePaise: nextPrice,
           gstRate: gst,
           hsnCode: hsnCode ?? existing.hsnCode,
-          stock: stock !== undefined ? Number(stock) : existing.stock,
+          stock: nextStock,
           imageUrl: mediaUrl,
           mediaType,
         },
@@ -206,8 +224,11 @@ router.put(
 // Admin: Soft Delete Product
 router.delete("/products/:id", authenticate, requireAdmin, async (req, res, next) => {
   try {
+    if (!/^[0-9a-fA-F]{24}$/.test(req.params.id)) {
+      throw new AppError("Invalid product ID", 400);
+    }
     await prisma.product.update({
-      where: { id: Number(req.params.id) },
+      where: { id: req.params.id },
       data: { isDeleted: true },
     });
     res.json({ success: true, message: "Product removed" });
