@@ -1,18 +1,19 @@
 {
   "name": "ecommerce-backend",
   "version": "1.0.0",
-  "main": "app.js",
+  "main": "backend/app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js",
-    "test": "node --test",
-    "routes": "node scripts/listRoutes.js",
-    "prisma:generate": "prisma generate",
-    "prisma:validate": "prisma validate",
-    "db:check": "node scripts/checkDatabase.js",
-    "db:push": "prisma db push",
-    "seed": "node prisma/seed.js",
-    "studio": "npx prisma studio"
+    "start": "node backend/app.js",
+    "admin": "npm --prefix frontend run dev",
+    "dev": "node --watch backend/app.js",
+    "test": "node --test backend/test/app.test.js backend/test/order-workflow.test.js",
+    "routes": "node backend/scripts/listRoutes.js",
+    "prisma:generate": "prisma generate --schema backend/prisma/schema.prisma",
+    "prisma:validate": "prisma validate --schema backend/prisma/schema.prisma",
+    "db:check": "node backend/scripts/checkDatabase.js",
+    "db:push": "prisma db push --schema backend/prisma/schema.prisma",
+    "seed": "node backend/prisma/seed.js",
+    "studio": "npx prisma studio --schema backend/prisma/schema.prisma"
   },
   "engines": {
     "node": ">=20"
@@ -29,6 +30,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
+    "nodemailer": "^10.3.1",
     "pdfkit": "^0.20.2",
     "razorpay": "^2.9.8"
   },
