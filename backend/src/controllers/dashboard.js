@@ -4,7 +4,7 @@ const { authenticate, requireAdmin } = require("../middleware/auth");
 const { AppError } = require("../middleware/error");
 const { getDateRange, summarizeCollections } = require("../utils/collectionReport");
 // Remove the old require('../utils/analytics') if it's there
-const { getDateRange, summarizeCollections, summarizeAnalyticsEvents } = require("../utils/collectionReport");
+
 const router = express.Router();
 
 router.get("/analytics", authenticate, requireAdmin, async (req, res, next) => {
