@@ -125,7 +125,7 @@ model Order {
   orderNumber         String?
   userId              String      @db.ObjectId
   status              String      @default("PENDING")
-  invoiceNumber       String?     @unique
+  invoiceNumber       String?     // FIX: @unique removed from here
 
   subtotalPaise       Int
   discountPaise       Int         @default(0)
@@ -159,9 +159,9 @@ model Order {
   checkoutMode        String      @default("CART")
   stockReserved       Boolean     @default(false)
   paidAt              DateTime?
-  shippingChargePaise Int     @default(0)
-  codChargePaise      Int     @default(0)
-  totalWeightKg       Float   @default(0.5)
+  shippingChargePaise Int         @default(0)
+  codChargePaise      Int         @default(0)
+  totalWeightKg       Float       @default(0.5)
   shiprocketOrderId   String?
   shipmentId          String?
   awbCode             String? // Tracking number (Air Waybill)
@@ -179,6 +179,7 @@ model Order {
 
   @@index([orderNumber])
   @@index([razorpayOrderId])
+  @@index([invoiceNumber]) // FIX: Standard index added here
 }
 
 model ProductInventoryMovement {
